@@ -16,3 +16,51 @@ EOF"
 ```  
 ### FOR UPDATE OR ADD PACKAGES IN REPO RUN ACTION WORKFLOW  (USE GITHUB MIGRATION PLEASE) 
 https://github.com/Neko-Void-Linux/repo-neko/actions/workflows/Migration.yml
+
+## Templates automáticos desde tarballs
+
+Este repositorio puede generar templates XBPS para binarios precompilados y
+proyectos compilables que publiquen tarballs en GitHub Releases. La
+automatización conserva el filtrado de Belka, pero añade comprobaciones
+específicas para XBPS:
+
+- descarta assets de Windows, macOS, BSD, ARM y otras arquitecturas;
+- para recetas `binary`, exige un tarball Linux x86_64 y un ELF x86_64;
+- para recetas `source`, exige un sistema de compilación soportado y las
+  dependencias declaradas por el revisor;
+- descarga con comprobación HTTP y calcula SHA256;
+- rechaza archivos vacíos, corruptos, rutas inseguras, enlaces que escapen del
+  archivo, dispositivos y archivos excesivamente grandes;
+- nunca sobrescribe templates mantenidos manualmente.
+
+Las recetas aprobadas viven en `meta/tarballs.tsv`. Cada línea contiene campos
+separados por tabuladores:
+
+```text
+pkgname  repo  patron_asset  tipo  ejecutable  build_style  licencia  descripcion  mantenedor  hostmakedepends  makedepends  dependencias  configure_args
+```
+
+Ejemplo:
+
+```text
+bat  sharkdp/bat  ^bat-v.*-x86_64-unknown-linux-gnu\.tar\.gz$  binary  bat  -  Apache-2.0 OR MIT  Clone de cat con resaltado de sintaxis
+```
+
+Después de añadir y revisar una receta se puede ejecutar:
+
+```sh
+python3 scripts/generate-xbps-templates.py bat
+scripts/check-generated-templates.sh
+```
+
+El workflow `Actualizar templates desde tarballs` ejecuta el mismo proceso cada
+domingo y también admite ejecución manual para uno o más paquetes. Sólo los
+templates que contienen la marca de autogenerado pueden ser actualizados por el
+bot. Los tarballs fuente admiten `cmake`, `meson`, `gnu-configure` y
+`gnu-makefile`. El workflow valida que exista la estructura correspondiente,
+pero el revisor debe declarar `hostmakedepends`, `makedepends`, `depends` y
+`configure_args`: esas decisiones no pueden deducirse de forma fiable sólo
+mirando el archivo. En una receta `source`, el patrón especial `TARBALL` usa el
+tarball automático de la etiqueta de GitHub cuando la release no publica un
+asset de código fuente. Los programas que necesiten árboles completos en `/opt`,
+archivos desktop o pasos personalizados deben seguir usando un template manual.

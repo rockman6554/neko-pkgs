@@ -1,0 +1,20 @@
+# Recetas aprobadas para generar templates XBPS desde tarballs.
+#
+# Columnas TSV:
+# pkgname  repo  patron_asset  tipo  ejecutable  build_style  licencia  descripcion  mantenedor  hostmakedepends  makedepends  dependencias  configure_args
+#
+# Reglas:
+# - repo debe ser owner/repo de GitHub;
+# - patron_asset es una expresion regular que selecciona un solo tarball;
+# - una receta source puede usar TARBALL para compilar el archivo de la etiqueta;
+# - tipo es binary o source;
+# - binary exige el nombre exacto del ELF principal;
+# - source exige build_style: cmake, meson, gnu-configure o gnu-makefile;
+# - las dependencias de compilacion deben ser revisadas y declaradas;
+# - licencia debe ser un identificador SPDX valido;
+# - mantenedor, dependencias y configure_args son opcionales.
+#
+# Ejemplos (quite el comentario para activarlos):
+# bat	sharkdp/bat	^bat-v.*-x86_64-unknown-linux-gnu\.tar\.gz$	binary	bat	-	Apache-2.0 OR MIT	Clone de cat con resaltado de sintaxis
+# ejemplo-src	owner/proyecto	^proyecto-.*\.tar\.gz$	source	-	cmake	MIT	Proyecto compilado desde fuentes		pkg-config	libfoo-devel	libfoo	-DBUILD_TESTING=OFF
+# ejemplo-tag	owner/proyecto	TARBALL	source	-	meson	MIT	Proyecto compilado desde el tag		pkg-config meson	libfoo-devel	libfoo	-Dtests=false

@@ -1,0 +1,62 @@
+name: Actualizar templates desde tarballs
+
+on:
+  schedule:
+    - cron: "17 3 * * 0"
+  workflow_dispatch:
+    inputs:
+      packages:
+        description: "Paquetes separados por espacios; vacio actualiza todos"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-tarball-templates
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Obtener repositorio
+        uses: actions/checkout@v4
+
+      - name: Instalar soporte para tar.zst
+        run: sudo apt-get update && sudo apt-get install -y zstd
+
+      - name: Generar templates XBPS
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PACKAGES: ${{ inputs.packages }}
+        run: |
+          set -eu
+          if [ -n "$PACKAGES" ]; then
+            # La expansion es intencional: el input acepta nombres separados por espacios.
+            # shellcheck disable=SC2086
+            python3 scripts/generate-xbps-templates.py --allow-failures -- $PACKAGES
+          else
+            python3 scripts/generate-xbps-templates.py --allow-failures
+          fi
+
+      - name: Validar templates generados
+        run: scripts/check-generated-templates.sh
+
+      - name: Publicar cambios
+        run: |
+          set -eu
+          if [ -z "$(git status --porcelain -- '*/template')" ]; then
+            echo "No hay actualizaciones."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- '*/template'
+          if git diff --cached --quiet --exit-code; then
+            echo "No hay templates actualizados."
+            exit 0
+          fi
+          git commit -m "chore: actualizar templates XBPS desde releases"
+          git push

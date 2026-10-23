@@ -1,0 +1,36 @@
+name: Validar automatizacion de tarballs
+
+on:
+  pull_request:
+    paths:
+      - "meta/tarballs.tsv"
+      - "scripts/generate-xbps-templates.py"
+      - "scripts/check-generated-templates.sh"
+      - "tests/**"
+      - "*/template"
+      - ".github/workflows/**"
+  push:
+    branches: [main]
+    paths:
+      - "meta/tarballs.tsv"
+      - "scripts/**"
+      - "tests/**"
+      - ".github/workflows/**"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pruebas del generador
+        run: python3 -m unittest discover -s tests -v
+
+      - name: Sintaxis de scripts y templates generados
+        run: |
+          python3 -m py_compile scripts/generate-xbps-templates.py
+          sh -n scripts/check-generated-templates.sh
+          scripts/check-generated-templates.sh
