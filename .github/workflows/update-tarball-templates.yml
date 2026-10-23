@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "meta/next.list"
+      - "scripts/import-next.py"
       - ".github/workflows/update-tarball-templates.yml"
   schedule:
     - cron: "17 3 * * 0"

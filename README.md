@@ -40,7 +40,9 @@ uno por línea. El workflow analiza la release, filtra los assets, detecta si es
 un binario, bundle o código fuente y, si pasa la revisión, añade su receta a
 `meta/tarballs.tsv` y genera el template. `next.list` es un registro permanente:
 los enlaces aprobados y fallidos permanecen allí; los ya importados se omiten
-sin duplicar sus recetas.
+sin duplicar sus recetas. Si se elimina una entrada, el siguiente workflow
+elimina también su receta y la carpeta generada. Los templates manuales y las
+carpetas con archivos adicionales nunca se borran automáticamente.
 
 Formatos opcionales de `next.list`:
 

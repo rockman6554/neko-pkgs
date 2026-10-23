@@ -90,6 +90,115 @@ class NextListTests(unittest.TestCase):
         self.assertNotRegex("tool-v9.8.7-linux-arm64.tar.gz", pattern)
 
 
+class RegistryPruningTests(unittest.TestCase):
+    @staticmethod
+    def recipe() -> importer.generator.Recipe:
+        return importer.generator.Recipe(
+            "tool",
+            "owner/tool",
+            r"^tool-.*-linux-x86_64\.tar\.gz$",
+            "binary",
+            "tool",
+            "-",
+            "MIT",
+            "Tool",
+        )
+
+    def prepare_registry(self, root: Path) -> Path:
+        path = root / "tarballs.tsv"
+        path.write_text(
+            "# registry\n" + importer.recipe_to_tsv(self.recipe()) + "\n",
+            encoding="utf-8",
+        )
+        return path
+
+    def test_removes_generated_package_missing_from_next_list(self):
+        with tempfile.TemporaryDirectory() as tmp_name:
+            root = Path(tmp_name)
+            registry = self.prepare_registry(root)
+            package = root / "tool"
+            package.mkdir()
+            (package / "template").write_text(
+                importer.generator.GENERATED_MARKER + "\n",
+                encoding="utf-8",
+            )
+
+            retained, removed, failures = importer.prune_unregistered_recipes(
+                registry, [self.recipe()], set(), root
+            )
+
+            self.assertEqual(retained, [])
+            self.assertEqual(removed, ["tool"])
+            self.assertEqual(failures, [])
+            self.assertFalse(package.exists())
+            self.assertEqual(registry.read_text(encoding="utf-8"), "# registry\n")
+
+    def test_keeps_recipe_that_is_still_registered(self):
+        with tempfile.TemporaryDirectory() as tmp_name:
+            root = Path(tmp_name)
+            registry = self.prepare_registry(root)
+            package = root / "tool"
+            package.mkdir()
+            template = package / "template"
+            template.write_text(
+                importer.generator.GENERATED_MARKER + "\n",
+                encoding="utf-8",
+            )
+
+            retained, removed, failures = importer.prune_unregistered_recipes(
+                registry, [self.recipe()], {"owner/tool"}, root
+            )
+
+            self.assertEqual(retained, [self.recipe()])
+            self.assertEqual(removed, [])
+            self.assertEqual(failures, [])
+            self.assertTrue(template.exists())
+            self.assertIn("owner/tool", registry.read_text(encoding="utf-8"))
+
+    def test_does_not_remove_manual_template(self):
+        with tempfile.TemporaryDirectory() as tmp_name:
+            root = Path(tmp_name)
+            registry = self.prepare_registry(root)
+            package = root / "tool"
+            package.mkdir()
+            template = package / "template"
+            template.write_text("# maintained manually\n", encoding="utf-8")
+
+            retained, removed, failures = importer.prune_unregistered_recipes(
+                registry, [self.recipe()], set(), root
+            )
+
+            self.assertEqual(retained, [self.recipe()])
+            self.assertEqual(removed, [])
+            self.assertEqual(len(failures), 1)
+            self.assertTrue(template.exists())
+            self.assertIn("owner/tool", registry.read_text(encoding="utf-8"))
+
+    def test_does_not_remove_package_with_additional_files(self):
+        with tempfile.TemporaryDirectory() as tmp_name:
+            root = Path(tmp_name)
+            registry = self.prepare_registry(root)
+            package = root / "tool"
+            package.mkdir()
+            template = package / "template"
+            template.write_text(
+                importer.generator.GENERATED_MARKER + "\n",
+                encoding="utf-8",
+            )
+            (package / "patches").mkdir()
+
+            retained, removed, failures = importer.prune_unregistered_recipes(
+                registry, [self.recipe()], set(), root
+            )
+
+            self.assertEqual(retained, [self.recipe()])
+            self.assertEqual(removed, [])
+            self.assertEqual(len(failures), 1)
+            self.assertTrue(template.exists())
+            self.assertTrue((package / "patches").exists())
+            self.assertIn("owner/tool", registry.read_text(encoding="utf-8"))
+
+
 class ExecutableDiscoveryTests(unittest.TestCase):
     @staticmethod
     def elf_x86_64() -> bytes:

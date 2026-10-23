@@ -1,4 +1,5 @@
 # Pegue aqui un repositorio GitHub por linea. El workflow conservara todas las entradas.
+# Al quitar una entrada, eliminara su receta y carpeta si fueron generadas automaticamente.
 #
 # Formatos admitidos:
 # https://github.com/owner/repo

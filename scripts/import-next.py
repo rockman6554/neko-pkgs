@@ -390,6 +390,71 @@ def write_recipes(path: Path, recipes: list[generator.Recipe]) -> None:
     os.replace(temporary, path)
 
 
+def remove_generated_package(root: Path, recipe: generator.Recipe) -> None:
+    package_dir = root / recipe.pkgname
+    template = package_dir / "template"
+    if not template.exists():
+        return
+    if package_dir.is_symlink() or template.is_symlink():
+        raise generator.GeneratorError(
+            f"{recipe.pkgname}: no se eliminara una ruta simbolica"
+        )
+    content = template.read_text(encoding="utf-8")
+    if generator.GENERATED_MARKER not in content:
+        raise generator.GeneratorError(
+            f"{recipe.pkgname}: el template es manual; no se eliminara"
+        )
+    extra = [item.name for item in package_dir.iterdir() if item.name != "template"]
+    if extra:
+        raise generator.GeneratorError(
+            f"{recipe.pkgname}: la carpeta contiene archivos adicionales: "
+            + ", ".join(sorted(extra))
+        )
+    template.unlink()
+    package_dir.rmdir()
+
+
+def remove_recipe_rows(path: Path, package_names: set[str]) -> None:
+    kept: list[str] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line.strip() and not line.lstrip().startswith("#"):
+            pkgname = line.split("\t", 1)[0].strip()
+            if pkgname in package_names:
+                continue
+        kept.append(line)
+    content = "\n".join(kept).rstrip() + "\n"
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(content, encoding="utf-8")
+    os.replace(temporary, path)
+
+
+def prune_unregistered_recipes(
+    path: Path,
+    recipes: list[generator.Recipe],
+    registered_repos: set[str],
+    root: Path = ROOT,
+) -> tuple[list[generator.Recipe], list[str], list[str]]:
+    retained: list[generator.Recipe] = []
+    removed: list[str] = []
+    failures: list[str] = []
+    for recipe in recipes:
+        if recipe.repo.lower() in registered_repos:
+            retained.append(recipe)
+            continue
+        try:
+            remove_generated_package(root, recipe)
+        except (OSError, generator.GeneratorError) as exc:
+            retained.append(recipe)
+            failures.append(f"{recipe.pkgname}: {exc}")
+            log(f"  ERROR eliminando {recipe.pkgname}: {exc}")
+            continue
+        removed.append(recipe.pkgname)
+        log(f"  REMOVE: receta y template generado de {recipe.pkgname}")
+    if removed:
+        remove_recipe_rows(path, set(removed))
+    return retained, removed, failures
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--allow-failures", action="store_true")
@@ -404,14 +469,15 @@ def main() -> int:
     except (OSError, generator.GeneratorError) as exc:
         log(f"Error: {exc}")
         return 2
-    if not candidates:
-        log("No hay repositorios pendientes en meta/next.list.")
-        return 0
+    registered_repos = {candidate.repo.lower() for candidate in candidates}
+    existing, removed, removal_failures = prune_unregistered_recipes(
+        RECIPES, existing, registered_repos
+    )
 
     existing_names = {recipe.pkgname for recipe in existing}
     existing_repos = {recipe.repo.lower() for recipe in existing}
     imported: list[generator.Recipe] = []
-    failed: list[str] = []
+    failed: list[str] = list(removal_failures)
     token = os.environ.get("GITHUB_TOKEN", "")
     for candidate in candidates:
         if candidate.pkgname in existing_names or candidate.repo.lower() in existing_repos:
@@ -432,7 +498,10 @@ def main() -> int:
 
     if imported:
         write_recipes(RECIPES, imported)
-    log(f"Importadas: {len(imported)}; pendientes: {len(failed)}")
+    log(
+        f"Importadas: {len(imported)}; eliminadas: {len(removed)}; "
+        f"fallos: {len(failed)}"
+    )
     if failed and not args.allow_failures:
         return 1
     return 0
