@@ -1,0 +1,7 @@
+# Pegue aqui un repositorio GitHub por linea. El workflow conservara los fallidos.
+#
+# Formatos admitidos:
+# https://github.com/owner/repo
+# https://github.com/owner/repo pkgname
+# https://github.com/owner/repo pkgname binary ejecutable
+# https://github.com/owner/repo pkgname source cmake

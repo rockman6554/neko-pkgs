@@ -33,8 +33,23 @@ específicas para XBPS:
   archivo, dispositivos y archivos excesivamente grandes;
 - nunca sobrescribe templates mantenidos manualmente.
 
-Las recetas aprobadas viven en `meta/tarballs.tsv`. Cada línea contiene campos
-separados por tabuladores:
+Para añadir un paquete basta con pegar su enlace de GitHub en `meta/next.list`,
+uno por línea. El workflow analiza la release, filtra los assets, detecta si es
+un binario o código fuente y, si pasa la revisión, lo mueve a
+`meta/tarballs.tsv` y genera el template. Los enlaces que fallen permanecen en
+`next.list` para corregirlos.
+
+Formatos opcionales de `next.list`:
+
+```text
+https://github.com/owner/repo
+https://github.com/owner/repo nombre-paquete
+https://github.com/owner/repo nombre-paquete binary ejecutable
+https://github.com/owner/repo nombre-paquete source cmake
+```
+
+Las recetas aprobadas de `meta/tarballs.tsv` contienen campos separados por
+tabuladores:
 
 ```text
 pkgname  repo  patron_asset  tipo  ejecutable  build_style  licencia  descripcion  mantenedor  hostmakedepends  makedepends  dependencias  configure_args

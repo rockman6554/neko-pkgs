@@ -3,9 +3,8 @@ name: Validar automatizacion de tarballs
 on:
   pull_request:
     paths:
-      - "meta/tarballs.tsv"
-      - "scripts/generate-xbps-templates.py"
-      - "scripts/check-generated-templates.sh"
+      - "meta/**"
+      - "scripts/**"
       - "tests/**"
       - "*/template"
       - ".github/workflows/**"
@@ -32,5 +31,6 @@ jobs:
       - name: Sintaxis de scripts y templates generados
         run: |
           python3 -m py_compile scripts/generate-xbps-templates.py
+          python3 -m py_compile scripts/import-next.py
           sh -n scripts/check-generated-templates.sh
           scripts/check-generated-templates.sh

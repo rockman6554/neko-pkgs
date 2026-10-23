@@ -27,6 +27,11 @@ jobs:
       - name: Instalar soporte para tar.zst
         run: sudo apt-get update && sudo apt-get install -y zstd
 
+      - name: Importar repositorios pendientes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 scripts/import-next.py --allow-failures
+
       - name: Generar templates XBPS
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -47,13 +52,13 @@ jobs:
       - name: Publicar cambios
         run: |
           set -eu
-          if [ -z "$(git status --porcelain -- '*/template')" ]; then
+          if [ -z "$(git status --porcelain -- meta/next.list meta/tarballs.tsv '*/template')" ]; then
             echo "No hay actualizaciones."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -- '*/template'
+          git add -- meta/next.list meta/tarballs.tsv '*/template'
           if git diff --cached --quiet --exit-code; then
             echo "No hay templates actualizados."
             exit 0
