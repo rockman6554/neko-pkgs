@@ -5,4 +5,4 @@
 # https://github.com/owner/repo pkgname
 # https://github.com/owner/repo pkgname binary ejecutable
 # https://github.com/owner/repo pkgname source cmake
-https://github.com/zed-industries/zed
+https://github.com/zed-industries/zed zed binary zed license=GPL-3.0-or-later
