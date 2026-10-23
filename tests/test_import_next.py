@@ -20,7 +20,7 @@ class NextListTests(unittest.TestCase):
         content = (
             "# pendientes\n"
             "https://github.com/owner/tool\n"
-            "owner/source custom-name source cmake\n"
+            "owner/source custom-name source cmake --ignore-license\n"
         )
         with tempfile.TemporaryDirectory() as tmp_name:
             path = Path(tmp_name) / "next.list"
@@ -30,9 +30,45 @@ class NextListTests(unittest.TestCase):
         self.assertEqual(candidates[0].repo, "owner/tool")
         self.assertEqual(candidates[0].pkgname, "tool")
         self.assertEqual(candidates[0].requested_kind, "auto")
+        self.assertFalse(candidates[0].ignore_license)
         self.assertEqual(candidates[1].pkgname, "custom-name")
         self.assertEqual(candidates[1].requested_kind, "source")
         self.assertEqual(candidates[1].requested_target, "cmake")
+        self.assertTrue(candidates[1].ignore_license)
+
+    def test_reads_ignore_license_without_other_optional_fields(self):
+        with tempfile.TemporaryDirectory() as tmp_name:
+            path = Path(tmp_name) / "next.list"
+            path.write_text("owner/tool --ignore-license\n", encoding="utf-8")
+            _, candidates = importer.read_candidates(path)
+        self.assertEqual(candidates[0].pkgname, "tool")
+        self.assertTrue(candidates[0].ignore_license)
+
+    def test_rejects_unknown_option(self):
+        with tempfile.TemporaryDirectory() as tmp_name:
+            path = Path(tmp_name) / "next.list"
+            path.write_text("owner/tool --ignore-all\n", encoding="utf-8")
+            with self.assertRaises(importer.generator.GeneratorError):
+                importer.read_candidates(path)
+
+    def test_rejects_ignore_option_without_repository(self):
+        with tempfile.TemporaryDirectory() as tmp_name:
+            path = Path(tmp_name) / "next.list"
+            path.write_text("--ignore-license\n", encoding="utf-8")
+            with self.assertRaises(importer.generator.GeneratorError):
+                importer.read_candidates(path)
+
+    def test_ignore_missing_github_license_uses_custom_marker(self):
+        repo_data = {"license": {"spdx_id": "NOASSERTION"}}
+        self.assertEqual(
+            importer.github_license(repo_data, ignore_missing=True),
+            "custom:unknown",
+        )
+
+    def test_missing_github_license_still_fails_by_default(self):
+        repo_data = {"license": {"spdx_id": "NOASSERTION"}}
+        with self.assertRaises(importer.generator.GeneratorError):
+            importer.github_license(repo_data)
 
     def test_generates_version_independent_asset_pattern(self):
         pattern = importer.generated_asset_pattern(

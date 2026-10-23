@@ -46,7 +46,13 @@ https://github.com/owner/repo
 https://github.com/owner/repo nombre-paquete
 https://github.com/owner/repo nombre-paquete binary ejecutable
 https://github.com/owner/repo nombre-paquete source cmake
+https://github.com/owner/repo nombre-paquete binary ejecutable --ignore-license
 ```
+
+La opcion `--ignore-license` solo omite el bloqueo cuando GitHub no entrega una
+licencia SPDX (`NOASSERTION` o `OTHER`). La receta conserva
+`license="custom:unknown"` para indicar que la licencia debe revisarse
+manualmente. Esta opcion no omite ninguna comprobacion del tarball.
 
 Las recetas aprobadas de `meta/tarballs.tsv` contienen campos separados por
 tabuladores:

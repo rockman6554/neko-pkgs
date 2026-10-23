@@ -33,6 +33,7 @@ HOST_DEPS = {
     "gnu-makefile": "pkg-config",
 }
 SOURCE_STYLE_ORDER = ("meson", "cmake", "gnu-configure", "gnu-makefile")
+UNKNOWN_LICENSE = "custom:unknown"
 
 
 @dataclass(frozen=True)
@@ -42,6 +43,7 @@ class Candidate:
     pkgname: str
     requested_kind: str
     requested_target: str
+    ignore_license: bool
 
 
 def log(message: str) -> None:
@@ -59,29 +61,55 @@ def read_candidates(path: Path) -> tuple[list[str], list[Candidate]]:
             comments.append(raw)
             continue
         fields = stripped.split()
-        if len(fields) > 4:
+        ignore_license = False
+        positional: list[str] = []
+        for field in fields:
+            if field == "--ignore-license":
+                if ignore_license:
+                    raise generator.GeneratorError(
+                        f"{path}:{line_number}: --ignore-license esta repetido"
+                    )
+                ignore_license = True
+            elif field.startswith("--"):
+                raise generator.GeneratorError(
+                    f"{path}:{line_number}: opcion desconocida: {field!r}"
+                )
+            else:
+                positional.append(field)
+        if not positional:
             raise generator.GeneratorError(
-                f"{path}:{line_number}: se esperaban como maximo 4 campos"
+                f"{path}:{line_number}: falta el repositorio GitHub"
             )
-        repo = generator.normalize_repo(fields[0])
+        if len(positional) > 4:
+            raise generator.GeneratorError(
+                f"{path}:{line_number}: se esperaban como maximo 4 campos posicionales"
+            )
+        repo = generator.normalize_repo(positional[0])
         default_name = repo.rsplit("/", 1)[1].lower()
-        pkgname = fields[1] if len(fields) >= 2 else default_name
+        pkgname = positional[1] if len(positional) >= 2 else default_name
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9+._-]*", pkgname):
             raise generator.GeneratorError(
                 f"{path}:{line_number}: pkgname invalido: {pkgname!r}"
             )
-        requested_kind = fields[2].lower() if len(fields) >= 3 else "auto"
+        requested_kind = positional[2].lower() if len(positional) >= 3 else "auto"
         if requested_kind not in {"auto", "binary", "source"}:
             raise generator.GeneratorError(
                 f"{path}:{line_number}: tipo invalido: {requested_kind!r}"
             )
-        requested_target = fields[3] if len(fields) >= 4 else ""
+        requested_target = positional[3] if len(positional) >= 4 else ""
         if requested_kind == "source" and requested_target and requested_target not in HOST_DEPS:
             raise generator.GeneratorError(
                 f"{path}:{line_number}: build_style no soportado: {requested_target!r}"
             )
         candidates.append(
-            Candidate(raw, repo, pkgname, requested_kind, requested_target)
+            Candidate(
+                raw,
+                repo,
+                pkgname,
+                requested_kind,
+                requested_target,
+                ignore_license,
+            )
         )
     return comments, candidates
 
@@ -91,12 +119,19 @@ def sanitize_description(value: object, pkgname: str) -> str:
     return text or f"Paquete {pkgname}"
 
 
-def github_license(repo_data: dict) -> str:
+def github_license(repo_data: dict, ignore_missing: bool = False) -> str:
     license_data = repo_data.get("license") or {}
     spdx = str(license_data.get("spdx_id") or "").strip()
     if not spdx or spdx in {"NOASSERTION", "OTHER"}:
+        if ignore_missing:
+            log(
+                "  AVISO: licencia SPDX no verificada; "
+                f"se usara {UNKNOWN_LICENSE}"
+            )
+            return UNKNOWN_LICENSE
         raise generator.GeneratorError(
-            "GitHub no informa una licencia SPDX; agregue la receta manualmente"
+            "GitHub no informa una licencia SPDX; use --ignore-license "
+            "solo despues de revisar la licencia manualmente"
         )
     return spdx
 
@@ -276,7 +311,7 @@ def import_candidate(candidate: Candidate, token: str) -> generator.Recipe:
     if not raw_tag:
         raise generator.GeneratorError("la ultima release no tiene tag_name")
     version = raw_tag[1:] if raw_tag.startswith("v") else raw_tag
-    license_id = github_license(repo_data)
+    license_id = github_license(repo_data, candidate.ignore_license)
     description = sanitize_description(repo_data.get("description"), candidate.pkgname)
     assets = release_assets(release_data)
 
