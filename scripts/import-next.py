@@ -46,6 +46,12 @@ class Candidate:
     ignore_license: bool
 
 
+@dataclass(frozen=True)
+class DiscoveredExecutable:
+    name: str
+    bundle_root: str | None
+
+
 def log(message: str) -> None:
     print(message, file=sys.stderr)
 
@@ -92,7 +98,7 @@ def read_candidates(path: Path) -> tuple[list[str], list[Candidate]]:
                 f"{path}:{line_number}: pkgname invalido: {pkgname!r}"
             )
         requested_kind = positional[2].lower() if len(positional) >= 3 else "auto"
-        if requested_kind not in {"auto", "binary", "source"}:
+        if requested_kind not in {"auto", "binary", "bundle", "source"}:
             raise generator.GeneratorError(
                 f"{path}:{line_number}: tipo invalido: {requested_kind!r}"
             )
@@ -153,7 +159,7 @@ def select_binary_asset(candidate: Candidate, assets: list[generator.ReleaseAsse
         pkgname=candidate.pkgname,
         repo=candidate.repo,
         asset_pattern=".*",
-        kind="binary",
+        kind="bundle" if candidate.requested_kind == "bundle" else "binary",
         executable=candidate.requested_target or candidate.pkgname,
         build_style="-",
         license="MIT",
@@ -169,7 +175,12 @@ def is_x86_64_elf(header: bytes) -> bool:
     return bool(byteorder) and int.from_bytes(header[18:20], byteorder) == 62
 
 
-def discover_executable(asset_path: Path, asset_name: str, preferred: str, pkgname: str) -> str:
+def discover_executable(
+    asset_path: Path,
+    asset_name: str,
+    preferred: str,
+    pkgname: str,
+) -> DiscoveredExecutable:
     with tempfile.TemporaryDirectory(prefix="neko-next-inspect-") as tmp_name:
         tar_path = generator.prepare_tar(asset_path, asset_name, Path(tmp_name))
         try:
@@ -231,12 +242,11 @@ def discover_executable(asset_path: Path, asset_name: str, preferred: str, pkgna
                 f"ejecutable ambiguo ({names}); indiquelo en next.list"
             )
         selected_path = candidates[0][2]
-        if any(part.lower().endswith(".app") for part in selected_path.parts[:-1]):
-            raise generator.GeneratorError(
-                "el tarball es un bundle de aplicacion; necesita una receta manual "
-                "o soporte de instalacion de bundles"
-            )
-        return candidates[0][1]
+        bundle_parts = [
+            part for part in selected_path.parts[:-1] if part.lower().endswith(".app")
+        ]
+        bundle_root = bundle_parts[0] if bundle_parts else None
+        return DiscoveredExecutable(candidates[0][1], bundle_root)
 
 
 def generated_asset_pattern(asset_name: str, version: str) -> str:
@@ -329,24 +339,38 @@ def import_candidate(candidate: Candidate, token: str) -> generator.Recipe:
             with tempfile.TemporaryDirectory(prefix="neko-next-binary-") as tmp_name:
                 asset_path = Path(tmp_name) / asset.name
                 generator.download_asset(asset, asset_path)
-                executable = discover_executable(
+                discovered = discover_executable(
                     asset_path,
                     asset.name,
                     candidate.requested_target,
                     candidate.pkgname,
                 )
+            if candidate.requested_kind == "binary" and discovered.bundle_root:
+                raise generator.GeneratorError(
+                    "el ejecutable pertenece a un bundle; use el tipo bundle"
+                )
+            if candidate.requested_kind == "bundle" and not discovered.bundle_root:
+                raise generator.GeneratorError(
+                    "se solicito bundle pero el ejecutable no esta dentro de *.app"
+                )
+            selected_kind = "bundle" if discovered.bundle_root else "binary"
             return generator.Recipe(
                 candidate.pkgname,
                 candidate.repo,
                 generated_asset_pattern(asset.name, version),
-                "binary",
-                executable,
+                selected_kind,
+                discovered.name,
                 "-",
                 license_id,
                 description,
+                depends=(
+                    "desktop-file-utils hicolor-icon-theme"
+                    if selected_kind == "bundle"
+                    else ""
+                ),
             )
         except generator.GeneratorError:
-            if candidate.requested_kind == "binary":
+            if candidate.requested_kind in {"binary", "bundle"}:
                 raise
 
     return source_recipe(

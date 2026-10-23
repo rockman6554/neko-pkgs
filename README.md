@@ -26,6 +26,8 @@ específicas para XBPS:
 
 - descarta assets de Windows, macOS, BSD, ARM y otras arquitecturas;
 - para recetas `binary`, exige un tarball Linux x86_64 y un ELF x86_64;
+- para recetas `bundle`, conserva el arbol completo de la aplicacion, enlaza el
+  ELF principal e instala sus archivos desktop e iconos cuando existen;
 - para recetas `source`, exige un sistema de compilación soportado y las
   dependencias declaradas por el revisor;
 - descarga con comprobación HTTP y calcula SHA256;
@@ -45,6 +47,7 @@ Formatos opcionales de `next.list`:
 https://github.com/owner/repo
 https://github.com/owner/repo nombre-paquete
 https://github.com/owner/repo nombre-paquete binary ejecutable
+https://github.com/owner/repo nombre-paquete bundle ejecutable
 https://github.com/owner/repo nombre-paquete source cmake
 https://github.com/owner/repo nombre-paquete binary ejecutable --ignore-license
 ```
@@ -83,5 +86,5 @@ pero el revisor debe declarar `hostmakedepends`, `makedepends`, `depends` y
 `configure_args`: esas decisiones no pueden deducirse de forma fiable sólo
 mirando el archivo. En una receta `source`, el patrón especial `TARBALL` usa el
 tarball automático de la etiqueta de GitHub cuando la release no publica un
-asset de código fuente. Los programas que necesiten árboles completos en `/opt`,
-archivos desktop o pasos personalizados deben seguir usando un template manual.
+asset de código fuente. Los programas con pasos personalizados que no encajen
+en los modos anteriores deben seguir usando un template manual.

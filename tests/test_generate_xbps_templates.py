@@ -127,8 +127,50 @@ class ArchiveInspectionTests(unittest.TestCase):
             with self.assertRaises(generator.GeneratorError):
                 generator.inspect_archive(archive, archive.name, recipe)
 
+    def test_inspects_application_bundle(self):
+        recipe = generator.Recipe(
+            "tool",
+            "owner/tool",
+            ".*",
+            "bundle",
+            "tool",
+            "-",
+            "custom:unknown",
+            "Tool bundle",
+        )
+        with tempfile.TemporaryDirectory() as tmp_name:
+            archive_path = Path(tmp_name) / "tool-linux-x86_64.tar.gz"
+            members = {
+                "tool.app/bin/tool": (self.elf_x86_64(), 0o755),
+                "tool.app/libexec/tool-editor": (self.elf_x86_64(), 0o755),
+                "tool.app/share/applications/tool.desktop": (b"[Desktop Entry]\n", 0o644),
+                "tool.app/share/icons/hicolor/512x512/apps/tool.png": (b"png", 0o644),
+                "tool.app/licenses.md": (b"License text\n", 0o644),
+            }
+            with tarfile.open(archive_path, "w:gz") as archive:
+                for name, (payload, mode) in members.items():
+                    info = tarfile.TarInfo(name)
+                    info.mode = mode
+                    info.size = len(payload)
+                    archive.addfile(info, io.BytesIO(payload))
+            result = generator.inspect_archive(
+                archive_path, archive_path.name, recipe
+            )
+        self.assertEqual(result.executable_path, "tool.app/bin/tool")
+        self.assertEqual(result.bundle_root, "tool.app")
+        self.assertEqual(result.license_path, "tool.app/licenses.md")
+        self.assertTrue(result.has_desktop_files)
+        self.assertTrue(result.has_icons)
+
 
 class RenderingTests(unittest.TestCase):
+    def test_short_description_obeys_xbps_byte_limit(self):
+        description = generator.xbps_short_desc(
+            "Code at the speed of thought – Zed is a high-performance, multiplayer."
+        )
+        self.assertLessEqual(len(description.encode("utf-8")), 72)
+        self.assertFalse(description.endswith("."))
+
     def test_template_contains_xbps_fields(self):
         recipe = generator.Recipe(
             "tool",
@@ -197,6 +239,48 @@ class RenderingTests(unittest.TestCase):
         self.assertIn('configure_args="-DBUILD_TESTING=OFF"', rendered)
         self.assertIn('vlicense "LICENSE"', rendered)
         self.assertNotIn("do_install()", rendered)
+
+    def test_bundle_template_preserves_tree_and_desktop_integration(self):
+        recipe = generator.Recipe(
+            "tool",
+            "owner/tool",
+            ".*",
+            "bundle",
+            "tool",
+            "-",
+            "custom:unknown",
+            "Application bundle",
+            depends="desktop-file-utils hicolor-icon-theme",
+        )
+        asset = generator.ReleaseAsset(
+            "tool-linux-x86_64.tar.gz",
+            "https://github.com/owner/tool/releases/download/v1.2.3/tool-linux-x86_64.tar.gz",
+            10,
+        )
+        inspected = generator.InspectedArchive(
+            "tool.app/bin/tool",
+            "tool.app/licenses.md",
+            "x86_64",
+            bundle_root="tool.app",
+            has_desktop_files=True,
+            has_icons=True,
+        )
+        rendered = generator.render_template(
+            recipe,
+            "1.2.3",
+            "https://github.com/owner/tool",
+            asset,
+            "c" * 64,
+            inspected,
+        )
+        self.assertIn('vcopy "tool.app" "usr/lib/tool"', rendered)
+        self.assertIn(
+            'ln -s "/usr/lib/tool/tool.app/bin/tool" "${DESTDIR}/usr/bin/tool"',
+            rendered,
+        )
+        self.assertIn('vcopy "tool.app/share/applications" usr/share', rendered)
+        self.assertIn('vcopy "tool.app/share/icons" usr/share', rendered)
+        self.assertIn('vlicense "tool.app/licenses.md"', rendered)
 
 
 if __name__ == "__main__":

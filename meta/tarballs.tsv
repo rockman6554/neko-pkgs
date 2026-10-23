@@ -7,8 +7,9 @@
 # - repo debe ser owner/repo de GitHub;
 # - patron_asset es una expresion regular que selecciona un solo tarball;
 # - una receta source puede usar TARBALL para compilar el archivo de la etiqueta;
-# - tipo es binary o source;
+# - tipo es binary, bundle o source;
 # - binary exige el nombre exacto del ELF principal;
+# - bundle conserva un arbol de aplicacion completo y enlaza su ELF principal;
 # - source exige build_style: cmake, meson, gnu-configure o gnu-makefile;
 # - las dependencias de compilacion deben ser revisadas y declaradas;
 # - licencia debe ser un identificador SPDX valido;
@@ -18,3 +19,4 @@
 # bat	sharkdp/bat	^bat-v.*-x86_64-unknown-linux-gnu\.tar\.gz$	binary	bat	-	Apache-2.0 OR MIT	Clone de cat con resaltado de sintaxis
 # ejemplo-src	owner/proyecto	^proyecto-.*\.tar\.gz$	source	-	cmake	MIT	Proyecto compilado desde fuentes		pkg-config	libfoo-devel	libfoo	-DBUILD_TESTING=OFF
 # ejemplo-tag	owner/proyecto	TARBALL	source	-	meson	MIT	Proyecto compilado desde el tag		pkg-config meson	libfoo-devel	libfoo	-Dtests=false
+zed	zed-industries/zed	^zed\-linux\-x86_64\.tar\.gz$	bundle	zed	-	custom:unknown	Code at the speed of thought – Zed is a high-performance, multiplayer code editor from the creators of Atom and Tree-sitter.				desktop-file-utils hicolor-icon-theme

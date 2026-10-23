@@ -79,7 +79,8 @@ GOOD_ARCH_RE = re.compile(
     r"(?:^|[_.-])(x86_64|amd64|x64|64bit)(?:[_.-]|$)", re.IGNORECASE
 )
 LICENSE_RE = re.compile(
-    r"^(license|licence|copying|copyright|notice)(?:[._-].*)?$", re.IGNORECASE
+    r"^(licenses?|licences?|copying|copyright|notice)(?:[._-].*)?$",
+    re.IGNORECASE,
 )
 
 
@@ -117,6 +118,9 @@ class InspectedArchive:
     license_path: str | None
     target_arch: str
     source_root: str | None = None
+    bundle_root: str | None = None
+    has_desktop_files: bool = False
+    has_icons: bool = False
 
 
 def log(message: str) -> None:
@@ -164,15 +168,15 @@ def read_recipes(path: Path) -> list[Recipe]:
                     raise GeneratorError(
                         f"{path}:{line_number}: patron invalido: {exc}"
                     ) from exc
-            if kind not in {"binary", "source"}:
+            if kind not in {"binary", "bundle", "source"}:
                 raise GeneratorError(
-                    f"{path}:{line_number}: tipo debe ser binary o source"
+                    f"{path}:{line_number}: tipo debe ser binary, bundle o source"
                 )
-            if kind == "binary" and (
+            if kind in {"binary", "bundle"} and (
                 "/" in executable or executable in {"", ".", "..", "-"}
             ):
                 raise GeneratorError(
-                    f"{path}:{line_number}: binary requiere un executable base"
+                    f"{path}:{line_number}: {kind} requiere un executable base"
                 )
             if kind == "source" and build_style not in {
                 "cmake",
@@ -284,7 +288,7 @@ def is_compatible_asset_name(name: str, kind: str = "binary") -> bool:
         return False
     if BAD_ARCH_RE.search(lower):
         return False
-    if kind == "binary":
+    if kind in {"binary", "bundle"}:
         if "linux" not in lower:
             return False
         if not GOOD_ARCH_RE.search(lower):
@@ -460,7 +464,7 @@ def inspect_archive(asset_path: Path, asset_name: str, recipe: Recipe) -> Inspec
                     unpacked_size += member.size
                     if unpacked_size > MAX_UNPACKED_BYTES:
                         raise GeneratorError(f"{asset_name}: contenido descomprimido demasiado grande")
-                    if recipe.kind == "binary" and path.name == recipe.executable:
+                    if recipe.kind in {"binary", "bundle"} and path.name == recipe.executable:
                         executable_members.append(member)
                     if LICENSE_RE.match(path.name):
                         license_members.append(member)
@@ -530,11 +534,43 @@ def inspect_archive(asset_path: Path, asset_name: str, recipe: Recipe) -> Inspec
             executable_path = extract_root / safe_member_path(executable.name)
             inspect_elf(executable_path)
 
+            bundle_root: str | None = None
+            has_desktop_files = False
+            has_icons = False
+            if recipe.kind == "bundle":
+                roots = {path.parts[0] for path in regular_paths if path.parts}
+                if len(roots) != 1:
+                    raise GeneratorError(
+                        f"{recipe.pkgname}: el bundle debe tener un unico directorio raiz"
+                    )
+                bundle_root = next(iter(roots))
+                executable_parts = safe_member_path(executable.name).parts
+                if len(executable_parts) < 2 or executable_parts[0] != bundle_root:
+                    raise GeneratorError(
+                        f"{recipe.pkgname}: el ejecutable no esta dentro del bundle"
+                    )
+                has_desktop_files = any(
+                    len(path.parts) >= 4
+                    and path.parts[0] == bundle_root
+                    and path.parts[1:3] == ("share", "applications")
+                    and path.suffix == ".desktop"
+                    for path in regular_paths
+                )
+                has_icons = any(
+                    len(path.parts) >= 4
+                    and path.parts[0] == bundle_root
+                    and path.parts[1:3] == ("share", "icons")
+                    for path in regular_paths
+                )
+
         target_arch = "x86_64-musl" if "musl" in asset_name.lower() else "x86_64"
         return InspectedArchive(
             executable_path=safe_member_path(executable.name).as_posix(),
             license_path=license_path,
             target_arch=target_arch,
+            bundle_root=bundle_root,
+            has_desktop_files=has_desktop_files,
+            has_icons=has_icons,
         )
 
 
@@ -558,6 +594,13 @@ def versioned_url(url: str, version: str) -> str:
     raise GeneratorError(f"la URL del asset no contiene la version {version!r}: {url}")
 
 
+def xbps_short_desc(value: str) -> str:
+    desc = " ".join(value.split()).rstrip(" .")
+    while len(desc.encode("utf-8")) > 72:
+        desc = desc[:-1].rstrip(" .")
+    return desc
+
+
 def render_template(
     recipe: Recipe,
     version: str,
@@ -566,9 +609,7 @@ def render_template(
     checksum: str,
     inspected: InspectedArchive,
 ) -> str:
-    desc = " ".join(recipe.short_desc.split())
-    if len(desc) > 72:
-        desc = desc[:69].rstrip() + "..."
+    desc = xbps_short_desc(recipe.short_desc)
     distfiles = versioned_url(asset.url, version)
     lines = [
         f"# Template file for '{recipe.pkgname}'",
@@ -578,13 +619,11 @@ def render_template(
         f"version={version}",
         "revision=1",
     ]
-    if recipe.kind == "binary":
+    if recipe.kind in {"binary", "bundle"}:
         lines.extend(
             [
                 f'archs="{inspected.target_arch}"',
                 "create_wrksrc=yes",
-                "nostrip=yes",
-                "nopie=yes",
             ]
         )
     else:
@@ -612,6 +651,8 @@ def render_template(
             f"checksum={checksum}",
         ]
     )
+    if recipe.kind in {"binary", "bundle"}:
+        lines.extend(["nostrip=yes", "nopie=yes"])
     if recipe.kind == "binary":
         if not inspected.executable_path:
             raise GeneratorError(f"{recipe.pkgname}: falta ruta del ejecutable inspeccionado")
@@ -622,6 +663,45 @@ def render_template(
                 f"\tvbin {shell_double_quote(inspected.executable_path)} {shell_double_quote(recipe.executable)}",
             ]
         )
+        if inspected.license_path:
+            lines.append(f"\tvlicense {shell_double_quote(inspected.license_path)}")
+        lines.append("}")
+    elif recipe.kind == "bundle":
+        if not inspected.executable_path or not inspected.bundle_root:
+            raise GeneratorError(
+                f"{recipe.pkgname}: faltan rutas del bundle inspeccionado"
+            )
+        executable_path = PurePosixPath(inspected.executable_path)
+        try:
+            executable_relative = executable_path.relative_to(inspected.bundle_root)
+        except ValueError as exc:
+            raise GeneratorError(
+                f"{recipe.pkgname}: el ejecutable escapa del bundle"
+            ) from exc
+        install_root = f"usr/lib/{recipe.pkgname}"
+        installed_executable = (
+            f"/usr/lib/{recipe.pkgname}/{inspected.bundle_root}/"
+            f"{executable_relative.as_posix()}"
+        )
+        lines.extend(
+            [
+                "",
+                "do_install() {",
+                f"\tvmkdir {shell_double_quote(install_root)}",
+                f"\tvcopy {shell_double_quote(inspected.bundle_root)} {shell_double_quote(install_root)}",
+                "\tvmkdir usr/bin",
+                f"\tln -s {shell_double_quote(installed_executable)} "
+                f'"${{DESTDIR}}/usr/bin/{recipe.executable}"',
+            ]
+        )
+        if inspected.has_desktop_files:
+            lines.append(
+                f"\tvcopy {shell_double_quote(f'{inspected.bundle_root}/share/applications')} usr/share"
+            )
+        if inspected.has_icons:
+            lines.append(
+                f"\tvcopy {shell_double_quote(f'{inspected.bundle_root}/share/icons')} usr/share"
+            )
         if inspected.license_path:
             lines.append(f"\tvlicense {shell_double_quote(inspected.license_path)}")
         lines.append("}")

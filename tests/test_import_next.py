@@ -21,6 +21,7 @@ class NextListTests(unittest.TestCase):
             "# pendientes\n"
             "https://github.com/owner/tool\n"
             "owner/source custom-name source cmake --ignore-license\n"
+            "owner/bundled bundled bundle bundled\n"
         )
         with tempfile.TemporaryDirectory() as tmp_name:
             path = Path(tmp_name) / "next.list"
@@ -35,6 +36,8 @@ class NextListTests(unittest.TestCase):
         self.assertEqual(candidates[1].requested_kind, "source")
         self.assertEqual(candidates[1].requested_target, "cmake")
         self.assertTrue(candidates[1].ignore_license)
+        self.assertEqual(candidates[2].requested_kind, "bundle")
+        self.assertEqual(candidates[2].requested_target, "bundled")
 
     def test_reads_ignore_license_without_other_optional_fields(self):
         with tempfile.TemporaryDirectory() as tmp_name:
@@ -101,9 +104,10 @@ class ExecutableDiscoveryTests(unittest.TestCase):
             executable = importer.discover_executable(
                 archive_path, archive_path.name, "", "tool"
             )
-        self.assertEqual(executable, "tool")
+        self.assertEqual(executable.name, "tool")
+        self.assertIsNone(executable.bundle_root)
 
-    def test_rejects_application_bundle(self):
+    def test_detects_application_bundle(self):
         with tempfile.TemporaryDirectory() as tmp_name:
             archive_path = Path(tmp_name) / "tool-linux-x86_64.tar.gz"
             with tarfile.open(archive_path, "w:gz") as archive:
@@ -112,13 +116,11 @@ class ExecutableDiscoveryTests(unittest.TestCase):
                 info.mode = 0o755
                 info.size = len(payload)
                 archive.addfile(info, io.BytesIO(payload))
-            with self.assertRaisesRegex(
-                importer.generator.GeneratorError,
-                "bundle de aplicacion",
-            ):
-                importer.discover_executable(
-                    archive_path, archive_path.name, "tool", "tool"
-                )
+            executable = importer.discover_executable(
+                archive_path, archive_path.name, "tool", "tool"
+            )
+        self.assertEqual(executable.name, "tool")
+        self.assertEqual(executable.bundle_root, "tool.app")
 
 
 if __name__ == "__main__":
