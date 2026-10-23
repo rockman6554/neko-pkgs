@@ -47,6 +47,15 @@ class NextListTests(unittest.TestCase):
         self.assertEqual(candidates[0].pkgname, "tool")
         self.assertTrue(candidates[0].ignore_license)
 
+    def test_reading_registry_preserves_its_contents(self):
+        content = "owner/tool\nowner/app app bundle app --ignore-license\n"
+        with tempfile.TemporaryDirectory() as tmp_name:
+            path = Path(tmp_name) / "next.list"
+            path.write_text(content, encoding="utf-8")
+            importer.read_candidates(path)
+            preserved = path.read_text(encoding="utf-8")
+        self.assertEqual(preserved, content)
+
     def test_rejects_unknown_option(self):
         with tempfile.TemporaryDirectory() as tmp_name:
             path = Path(tmp_name) / "next.list"

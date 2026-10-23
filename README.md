@@ -37,9 +37,10 @@ específicas para XBPS:
 
 Para añadir un paquete basta con pegar su enlace de GitHub en `meta/next.list`,
 uno por línea. El workflow analiza la release, filtra los assets, detecta si es
-un binario o código fuente y, si pasa la revisión, lo mueve a
-`meta/tarballs.tsv` y genera el template. Los enlaces que fallen permanecen en
-`next.list` para corregirlos.
+un binario, bundle o código fuente y, si pasa la revisión, añade su receta a
+`meta/tarballs.tsv` y genera el template. `next.list` es un registro permanente:
+los enlaces aprobados y fallidos permanecen allí; los ya importados se omiten
+sin duplicar sus recetas.
 
 Formatos opcionales de `next.list`:
 

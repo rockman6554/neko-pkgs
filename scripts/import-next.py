@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Import repositories from meta/next.list into reviewed XBPS recipes."""
+"""Import repositories from the persistent meta/next.list registry."""
 
 from __future__ import annotations
 
@@ -390,13 +390,6 @@ def write_recipes(path: Path, recipes: list[generator.Recipe]) -> None:
     os.replace(temporary, path)
 
 
-def write_next(path: Path, comments: list[str], failed: list[str]) -> None:
-    content = "\n".join(comments + failed).rstrip() + "\n"
-    temporary = path.with_suffix(path.suffix + ".tmp")
-    temporary.write_text(content, encoding="utf-8")
-    os.replace(temporary, path)
-
-
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--allow-failures", action="store_true")
@@ -406,7 +399,7 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     try:
-        comments, candidates = read_candidates(NEXT_LIST)
+        _, candidates = read_candidates(NEXT_LIST)
         existing = generator.read_recipes(RECIPES)
     except (OSError, generator.GeneratorError) as exc:
         log(f"Error: {exc}")
@@ -439,7 +432,6 @@ def main() -> int:
 
     if imported:
         write_recipes(RECIPES, imported)
-    write_next(NEXT_LIST, comments, failed)
     log(f"Importadas: {len(imported)}; pendientes: {len(failed)}")
     if failed and not args.allow_failures:
         return 1
