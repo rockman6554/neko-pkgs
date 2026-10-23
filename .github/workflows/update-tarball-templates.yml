@@ -1,6 +1,11 @@
 name: Actualizar templates desde tarballs
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "meta/next.list"
+      - ".github/workflows/update-tarball-templates.yml"
   schedule:
     - cron: "17 3 * * 0"
   workflow_dispatch:

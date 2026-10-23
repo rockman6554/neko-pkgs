@@ -78,10 +78,11 @@ python3 scripts/generate-xbps-templates.py bat
 scripts/check-generated-templates.sh
 ```
 
-El workflow `Actualizar templates desde tarballs` ejecuta el mismo proceso cada
-domingo y también admite ejecución manual para uno o más paquetes. Sólo los
-templates que contienen la marca de autogenerado pueden ser actualizados por el
-bot. Los tarballs fuente admiten `cmake`, `meson`, `gnu-configure` y
+El workflow `Actualizar templates desde tarballs` se ejecuta automáticamente
+cuando cambia `meta/next.list`, cada domingo y también de forma manual para uno
+o más paquetes. Sólo los templates que contienen la marca de autogenerado
+pueden ser actualizados por el bot. Los tarballs fuente admiten `cmake`,
+`meson`, `gnu-configure` y
 `gnu-makefile`. El workflow valida que exista la estructura correspondiente,
 pero el revisor debe declarar `hostmakedepends`, `makedepends`, `depends` y
 `configure_args`: esas decisiones no pueden deducirse de forma fiable sólo
