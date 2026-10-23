@@ -20,5 +20,6 @@
 # ejemplo-src	owner/proyecto	^proyecto-.*\.tar\.gz$	source	-	cmake	MIT	Proyecto compilado desde fuentes		pkg-config	libfoo-devel	libfoo	-DBUILD_TESTING=OFF
 # ejemplo-tag	owner/proyecto	TARBALL	source	-	meson	MIT	Proyecto compilado desde el tag		pkg-config meson	libfoo-devel	libfoo	-Dtests=false
 keepassxc	keepassxreboot/keepassxc	TARBALL	source	-	cmake	custom:unknown	KeePassXC is a cross-platform community-driven port of the Windows application “KeePass Password Safe”.		cmake ninja pkg-config
+neovim	neovim/neovim	^nvim\-linux\-x86_64\.tar\.gz$	binary	nvim	-	custom:unknown	Vim-fork focused on extensibility and usability
 stk-code	supertuxkart/stk-code	TARBALL	source	-	cmake	custom:unknown	The code base of SuperTuxKart		cmake ninja pkg-config
 zed	zed-industries/zed	^zed\-linux\-x86_64\.tar\.gz$	bundle	zed	-	custom:unknown	Code at the speed of thought – Zed is a high-performance, multiplayer code editor from the creators of Atom and Tree-sitter.				desktop-file-utils hicolor-icon-theme
