@@ -176,7 +176,9 @@ def discover_executable(asset_path: Path, asset_name: str, preferred: str, pkgna
             archive = tarfile.open(tar_path, mode="r:*")
         except (tarfile.TarError, OSError) as exc:
             raise generator.GeneratorError(f"tarball corrupto: {exc}") from exc
-        candidates: list[tuple[tuple[int, int, int, str], str]] = []
+        candidates: list[
+            tuple[tuple[int, int, int, str], str, Path]
+        ] = []
         with archive:
             members = archive.getmembers()
             if not members or len(members) > generator.MAX_MEMBERS:
@@ -212,7 +214,7 @@ def discover_executable(asset_path: Path, asset_name: str, preferred: str, pkgna
                 ) else 2
                 exec_rank = 0 if member.mode & 0o111 else 1
                 score = (name_rank, exec_rank, len(path.parts), basename)
-                candidates.append((score, basename))
+                candidates.append((score, basename, Path(*path.parts)))
         if preferred:
             exact = [item for item in candidates if item[1] == preferred]
             if not exact:
@@ -227,6 +229,12 @@ def discover_executable(asset_path: Path, asset_name: str, preferred: str, pkgna
             names = ", ".join(sorted({item[1] for item in candidates}))
             raise generator.GeneratorError(
                 f"ejecutable ambiguo ({names}); indiquelo en next.list"
+            )
+        selected_path = candidates[0][2]
+        if any(part.lower().endswith(".app") for part in selected_path.parts[:-1]):
+            raise generator.GeneratorError(
+                "el tarball es un bundle de aplicacion; necesita una receta manual "
+                "o soporte de instalacion de bundles"
             )
         return candidates[0][1]
 

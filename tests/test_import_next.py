@@ -103,6 +103,23 @@ class ExecutableDiscoveryTests(unittest.TestCase):
             )
         self.assertEqual(executable, "tool")
 
+    def test_rejects_application_bundle(self):
+        with tempfile.TemporaryDirectory() as tmp_name:
+            archive_path = Path(tmp_name) / "tool-linux-x86_64.tar.gz"
+            with tarfile.open(archive_path, "w:gz") as archive:
+                payload = self.elf_x86_64()
+                info = tarfile.TarInfo("tool.app/bin/tool")
+                info.mode = 0o755
+                info.size = len(payload)
+                archive.addfile(info, io.BytesIO(payload))
+            with self.assertRaisesRegex(
+                importer.generator.GeneratorError,
+                "bundle de aplicacion",
+            ):
+                importer.discover_executable(
+                    archive_path, archive_path.name, "tool", "tool"
+                )
+
 
 if __name__ == "__main__":
     unittest.main()
